@@ -15,142 +15,120 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AB-10X Calendar</title>
 <link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#4f46e5">
 <style>
-    body {
-        font-family: Arial, sans-serif;
-        margin: 0; padding: 0;
-        background: #f9fafb;
-        color: #111827;
-    }
-    header {
-        background: #4f46e5;
-        color: white;
-        padding: 1rem;
-        text-align: center;
-        font-size: 1.5rem;
-    }
-    #calendar {
-        display: grid;
-        grid-template-columns: repeat(7, 1fr);
-        gap: 2px;
-        padding: 10px;
-    }
-    .day {
-        background: white;
-        padding: 10px;
-        text-align: right;
-        min-height: 80px;
-        border: 1px solid #e5e7eb;
-        display: flex;
-        flex-direction: column;
-        justify-content: space-between;
-    }
-    .note {
-        font-size: 0.8rem;
-        background: #e0e7ff;
-        padding: 2px 4px;
-        border-radius: 3px;
-        margin-top: 5px;
-        flex-grow: 1;
-    }
-    #noteBox {
-        display: flex;
-        padding: 10px;
-        background: #eef2ff;
-    }
-    #noteText {
-        flex-grow: 1;
-        padding: 5px;
-        font-size: 1rem;
-    }
-    #saveNote {
-        background: #4f46e5;
-        color: white;
-        border: none;
-        padding: 8px 12px;
-        cursor: pointer;
-        font-size: 1rem;
-    }
+  :root {
+    --bg: #f5f6fa;
+    --panel: #ffffff;
+    --text: #2f3640;
+    --accent: #487eb0;
+    --muted: #718093;
+    --shadow: 0 4px 16px rgba(0,0,0,0.15);
+    --radius: 12px;
+    --gap: 10px;
+  }
+  * {box-sizing:border-box;}
+  body {margin:0; font-family:'Segoe UI',sans-serif; background:var(--bg); color:var(--text);}
+  .app {max-width:900px; margin:20px auto; padding:16px;}
+  .toolbar {display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;}
+  .title {font-size:1.8rem; font-weight:700;}
+  .btn {padding:10px 16px; border:none; border-radius:var(--radius); background:var(--accent); color:#fff; cursor:pointer; font-weight:600; box-shadow:var(--shadow); transition:0.15s;}
+  .btn:hover {transform:translateY(-2px);}
+  .calendar {display:grid; grid-template-columns:repeat(7,1fr); gap:6px; background:var(--panel); padding:12px; border-radius:var(--radius); box-shadow:var(--shadow);}
+  .dow div {text-align:center; font-weight:700; color:var(--muted); font-size:0.85rem;}
+  .cell {min-height:90px; border-radius:var(--radius); background:#f1f2f6; border:1px solid #dcdde1; padding:6px; cursor:pointer; position:relative; transition:0.2s;}
+  .cell:hover {background:#dcdde1;}
+  .cell.today {outline:2px solid var(--accent); outline-offset:-2px;}
+  .date {font-weight:700; font-size:0.9rem; margin-bottom:4px;}
+  .dot {position:absolute; right:6px; bottom:6px; width:8px; height:8px; border-radius:50%; background:var(--accent);}
+  dialog.modal {border:none; border-radius:var(--radius); padding:0; background:var(--panel); box-shadow:var(--shadow); width:min(500px,90vw);}
+  dialog.modal header, dialog.modal footer {padding:12px; border-bottom:1px solid #dcdde1;}
+  dialog.modal footer {border-bottom:none; display:flex; justify-content:flex-end; gap:8px;}
+  .modal .body {padding:12px; display:grid; gap:8px;}
+  textarea.text, input.text {width:100%; padding:8px; border-radius:var(--radius); border:1px solid #dcdde1; font-family:inherit;}
+  .legend {display:flex; gap:8px; margin-top:8px; font-size:0.85rem; color:var(--muted);}
+  .monthYear {text-align:center; font-weight:700; margin-bottom:8px;}
+  .calendarHeader {display:grid; grid-template-columns:repeat(7,1fr); gap:6px; margin-bottom:6px;}
 </style>
 </head>
 <body>
-
-<header>AB-10X Calendar</header>
-
-<div id="calendar"></div>
-
-<div id="noteBox">
-    <input type="text" id="noteText" placeholder="Write a note for selected date...">
-    <button id="saveNote">Save</button>
+<div class="app">
+  <div class="toolbar">
+    <button class="btn" id="prevMonth">⟨</button>
+    <div class="monthYear" id="monthYear"></div>
+    <button class="btn" id="nextMonth">⟩</button>
+  </div>
+  <div class="calendarHeader" id="dowHeader"></div>
+  <div class="calendar" id="calendarGrid"></div>
+  <div class="legend">Click a day to add/edit notes</div>
 </div>
 
+<dialog class="modal" id="eventModal">
+  <header>Edit Day</header>
+  <div class="body">
+    <label for="eventText">Notes:</label>
+    <textarea id="eventText" class="text" rows="6"></textarea>
+  </div>
+  <footer>
+    <button class="btn" id="cancelEvent">Cancel</button>
+    <button class="btn" id="saveEvent">Save</button>
+  </footer>
+</dialog>
+
 <script>
-const calendarEl = document.getElementById("calendar");
-const noteInput = document.getElementById("noteText");
-const saveNoteBtn = document.getElementById("saveNote");
-let selectedDate = null;
-let notes = JSON.parse(localStorage.getItem("calendarNotes") || "{}");
+const state = { year:new Date().getFullYear(), month:new Date().getMonth(), events:{} };
+const calendarGrid=document.getElementById('calendarGrid');
+const monthYear=document.getElementById('monthYear');
+const dowHeader=document.getElementById('dowHeader');
+const DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
-function generateCalendar(year, month) {
-    calendarEl.innerHTML = "";
-    const firstDay = new Date(year, month, 1).getDay();
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+function pad2(n){return String(n).padStart(2,'0');}
+function ymd(y,m,d){return `${y}-${pad2(m+1)}-${pad2(d)}`;}
+function daysInMonth(y,m){return new Date(y,m+1,0).getDate();}
+function firstDay(y,m){return new Date(y,m,1).getDay();}
 
-    weekdays.forEach(day => {
-        const headerCell = document.createElement("div");
-        headerCell.textContent = day;
-        headerCell.style.fontWeight = "bold";
-        headerCell.style.textAlign = "center";
-        calendarEl.appendChild(headerCell);
-    });
-
-    for (let i = 0; i < firstDay; i++) {
-        const emptyCell = document.createElement("div");
-        calendarEl.appendChild(emptyCell);
-    }
-
-    for (let d = 1; d <= daysInMonth; d++) {
-        const dateKey = `${year}-${month+1}-${d}`;
-        const dayCell = document.createElement("div");
-        dayCell.className = "day";
-        dayCell.innerHTML = `<div>${d}</div>`;
-
-        if (notes[dateKey]) {
-            const noteEl = document.createElement("div");
-            noteEl.className = "note";
-            noteEl.textContent = notes[dateKey];
-            dayCell.appendChild(noteEl);
-        }
-
-        dayCell.addEventListener("click", () => {
-            selectedDate = dateKey;
-            noteInput.value = notes[dateKey] || "";
-        });
-
-        calendarEl.appendChild(dayCell);
-    }
+function renderDOW(){
+  dowHeader.innerHTML='';
+  DOW.forEach(d=>{const el=document.createElement('div'); el.textContent=d; dowHeader.appendChild(el);});
 }
 
-saveNoteBtn.addEventListener("click", () => {
-    if (!selectedDate) {
-        alert("Please select a date first.");
-        return;
-    }
-    notes[selectedDate] = noteInput.value;
-    localStorage.setItem("calendarNotes", JSON.stringify(notes));
-    generateCalendar(new Date().getFullYear(), new Date().getMonth());
+function renderCalendar(){
+  monthYear.textContent=`${new Date(state.year,state.month).toLocaleString('default',{month:'long'})} ${state.year}`;
+  calendarGrid.innerHTML='';
+  const y=state.year,m=state.month,total=daysInMonth(y,m),start=firstDay(y,m);
+  // previous month fill
+  for(let i=0;i<start;i++){
+    const cell=document.createElement('div'); cell.className='cell out'; calendarGrid.appendChild(cell);
+  }
+  for(let d=1;d<=total;d++){
+    const cell=document.createElement('div'); cell.className='cell';
+    const key=ymd(y,m,d); cell.dataset.date=key;
+    const dateEl=document.createElement('div'); dateEl.className='date'; dateEl.textContent=d; cell.appendChild(dateEl);
+    if(state.events[key]&&state.events[key].trim()){ const dot=document.createElement('div'); dot.className='dot'; cell.appendChild(dot);}
+    cell.addEventListener('click',()=>openEventModal(key));
+    if(new Date().toDateString()===new Date(y,m,d).toDateString()){ cell.classList.add('today'); }
+    calendarGrid.appendChild(cell);
+  }
+}
+
+const eventModal=document.getElementById('eventModal');
+const eventText=document.getElementById('eventText');
+let selectedDate=null;
+
+function openEventModal(dateKey){selectedDate=dateKey; eventText.value=state.events[dateKey]||''; eventModal.showModal();}
+document.getElementById('cancelEvent').addEventListener('click',()=>eventModal.close());
+document.getElementById('saveEvent').addEventListener('click',()=>{
+  if(selectedDate){ const v=eventText.value.trim(); if(v) state.events[selectedDate]=v; else delete state.events[selectedDate]; renderCalendar(); eventModal.close(); }
 });
 
-generateCalendar(new Date().getFullYear(), new Date().getMonth());
+document.getElementById('prevMonth').addEventListener('click',()=>{
+  state.month--; if(state.month<0){state.month=11; state.year--;} renderCalendar();
+});
+document.getElementById('nextMonth').addEventListener('click',()=>{
+  state.month++; if(state.month>11){state.month=0; state.year++;} renderCalendar();
+});
 
-// PWA Service Worker Registration
-if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("service-worker.js")
-        .then(() => console.log("Service Worker registered"));
-}
+renderDOW();
+renderCalendar();
 </script>
-
 </body>
 </html>
