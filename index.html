@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<!-- PWA manifest -->
+<link rel="manifest" href="manifest.json">
+
+<!-- Theme color for status bar -->
+<meta name="theme-color" content="#6aa6ff">
+
+<!-- iOS support -->
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AB-10X Calendar</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#4f46e5">
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        margin: 0; padding: 0;
+        background: #f9fafb;
+        color: #111827;
+    }
+    header {
+        background: #4f46e5;
+        color: white;
+        padding: 1rem;
+        text-align: center;
+        font-size: 1.5rem;
+    }
+    #calendar {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 2px;
+        padding: 10px;
+    }
+    .day {
+        background: white;
+        padding: 10px;
+        text-align: right;
+        min-height: 80px;
+        border: 1px solid #e5e7eb;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+    }
+    .note {
+        font-size: 0.8rem;
+        background: #e0e7ff;
+        padding: 2px 4px;
+        border-radius: 3px;
+        margin-top: 5px;
+        flex-grow: 1;
+    }
+    #noteBox {
+        display: flex;
+        padding: 10px;
+        background: #eef2ff;
+    }
+    #noteText {
+        flex-grow: 1;
+        padding: 5px;
+        font-size: 1rem;
+    }
+    #saveNote {
+        background: #4f46e5;
+        color: white;
+        border: none;
+        padding: 8px 12px;
+        cursor: pointer;
+        font-size: 1rem;
+    }
+</style>
+</head>
+<body>
+
+<header>AB-10X Calendar</header>
+
+<div id="calendar"></div>
+
+<div id="noteBox">
+    <input type="text" id="noteText" placeholder="Write a note for selected date...">
+    <button id="saveNote">Save</button>
+</div>
+
+<script>
+const calendarEl = document.getElementById("calendar");
+const noteInput = document.getElementById("noteText");
+const saveNoteBtn = document.getElementById("saveNote");
+let selectedDate = null;
+let notes = JSON.parse(localStorage.getItem("calendarNotes") || "{}");
+
+function generateCalendar(year, month) {
+    calendarEl.innerHTML = "";
+    const firstDay = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+    weekdays.forEach(day => {
+        const headerCell = document.createElement("div");
+        headerCell.textContent = day;
+        headerCell.style.fontWeight = "bold";
+        headerCell.style.textAlign = "center";
+        calendarEl.appendChild(headerCell);
+    });
+
+    for (let i = 0; i < firstDay; i++) {
+        const emptyCell = document.createElement("div");
+        calendarEl.appendChild(emptyCell);
+    }
+
+    for (let d = 1; d <= daysInMonth; d++) {
+        const dateKey = `${year}-${month+1}-${d}`;
+        const dayCell = document.createElement("div");
+        dayCell.className = "day";
+        dayCell.innerHTML = `<div>${d}</div>`;
+
+        if (notes[dateKey]) {
+            const noteEl = document.createElement("div");
+            noteEl.className = "note";
+            noteEl.textContent = notes[dateKey];
+            dayCell.appendChild(noteEl);
+        }
+
+        dayCell.addEventListener("click", () => {
+            selectedDate = dateKey;
+            noteInput.value = notes[dateKey] || "";
+        });
+
+        calendarEl.appendChild(dayCell);
+    }
+}
+
+saveNoteBtn.addEventListener("click", () => {
+    if (!selectedDate) {
+        alert("Please select a date first.");
+        return;
+    }
+    notes[selectedDate] = noteInput.value;
+    localStorage.setItem("calendarNotes", JSON.stringify(notes));
+    generateCalendar(new Date().getFullYear(), new Date().getMonth());
+});
+
+generateCalendar(new Date().getFullYear(), new Date().getMonth());
+
+// PWA Service Worker Registration
+if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("service-worker.js")
+        .then(() => console.log("Service Worker registered"));
+}
+</script>
+
+</body>
+</html>
